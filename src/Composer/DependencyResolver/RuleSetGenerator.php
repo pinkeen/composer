@@ -78,6 +78,7 @@ class RuleSetGenerator
      */
     protected function createInstallOneOfRule(array $packages, $reason, $reasonData)
     {
+
         $literals = array();
         foreach ($packages as $package) {
             $literals[] = $package->id;

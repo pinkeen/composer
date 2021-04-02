@@ -1,0 +1,141 @@
+#!/usr/bin/env php
+<?php
+
+require __DIR__.'/../vendor/autoload.php';
+
+use Composer\DependencyResolver\Sat\Bridge\Minisat\FFISolver;
+
+function pp($title, $data) {
+    echo(" -> $title: " . json_encode($data) . "\n");
+}
+
+function s($clauses, $assumpts = [], $decisions = [], $polarities = [], $nr = null) {
+    static $sc = 0; $nr = null == $nr ? ++$sc : $nr;
+
+    $solver = new FFISolver();
+
+    echo(sprintf("*** Solve case #%d (%d clauses, %d assumpts) ***\n", $nr, count($clauses), count($assumpts)));
+
+    foreach ($polarities as $var => $polarity) {
+        $solver->setVariablePolarity($var, $polarity);
+    }
+
+    $solver->setDecisionLiterals($decisions);
+
+    $solver->addClauses($clauses);
+    
+    $solver->simplify();
+    if (!$solver->solve($assumpts)) {
+        echo("  ! UNSOLVABLE");
+        pp("Conflict", $solver->getConflict());
+        pp("Statistics", $solver->getStatistics());
+        echo("\n");
+        return false;
+    }
+
+    pp("Solution Model", array_values(array_filter($solver->getModel(), fn($x) => $x > 0)));
+    
+    $varRange = range(1, $solver->getVariablesNumber());
+    $varValue = function($var) use ($solver) { return $solver::VALUE_NAMES[$solver->getVariableValue($var)]; };
+
+    pp("Variable Values", array_map($varValue, array_combine($varRange, $varRange)));
+
+    pp("Statistics", $solver->getStatistics());
+
+    echo("\n");
+    return true;
+}
+
+(new FFISolver())->build();
+
+
+
+// s([[1, 2], [2, 3], [3, 4], [1], [4]], []);
+// s([[1, 2], [2, 3], [3, 4]]          , [1, 4]);
+
+// s([[1, 2], [2, 3], [3, 4], [4], [3]], []);
+// s([[1, 2], [2, 3], [3, 4]]          , [4, 3]);
+
+// s([[1, 2, 3, 4], [-2, -3, -4, 1]], [], [], [1 => 0]);
+
+// s(
+//     [
+//         // A(1) ~> B(2)
+//         [-1, 2],
+
+//         // B(2) ~> C(3) | C(4)
+//         [-2, 3, 4],
+
+//         // C(3) | C(4)
+//         // [-3, -4],
+
+//         // D(6) | D(7) | D(8)
+//         // [-8, -6, -7],
+
+//         // C(3) ~> D(8)
+//         [-3, 8],
+//         // C(4) ~> D(6) | D(7)
+//         [-4, 6, 7],
+        
+
+
+
+        
+//     ],
+//     [1]
+// );
+
+
+// s(
+//     [
+//         [1, 2, 3],
+//         [-1, -2, -3],
+//         [6, 7, 8, 9, 10],
+//         [-6, -7, -8, -9, -10],
+
+        
+
+//         [-1, 4],
+//         [-2, 4],
+//         [-3, 5],
+
+//         [-4, 7],
+//         [-5, 8, 9, 10],
+
+//         // [-11, -8],
+
+        
+        
+//     ],
+//     [
+      
+//     ],
+//     [],
+//     array_combine(range(1, 10), array_fill(0, 10, 0))
+// );
+
+// s(
+//     [
+//         []
+//         [1, 2, 3],
+//         [4, 5],
+//         [6, 7, 8],
+//         [9, 10],
+//         [11, 12, 13, 14, 15],
+//         [-9, -8]
+
+//         // [-9, -3],
+//         // [-5, -2],
+//         // [-10, -7],
+//     ],
+//     [5, 12, -2],
+//     []
+//     // array_combine(range(1, 10), array_fill(0, 10, 0))
+// );
+
+s([
+    [10, 7, 8, 9],
+    [3, 1, 2],
+    [4, 5, 6],
+]);
+// var_dump(array_combine(range(1, 3), array_fill(0, 3, 0)));

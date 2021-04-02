@@ -16,6 +16,10 @@ use Composer\IO\IOInterface;
 use Composer\Package\PackageInterface;
 use Composer\Repository\PlatformRepository;
 
+use Composer\DependencyResolver\Sat\Bridge\Minisat\FFISolver as ExternalSolver;
+use Composer\DependencyResolver\Sat\Adapter\Composer\DependencyResolverAdapter as ExternalSolverAdapter;
+use Symfony\Component\Stopwatch\Stopwatch;
+
 /**
  * @author Nils Adermann <naderman@naderman.de>
  */
@@ -191,6 +195,7 @@ class Solver
 
         $this->io->writeError('Generating rules', true, IOInterface::DEBUG);
         $ruleSetGenerator = new RuleSetGenerator($this->policy, $this->pool);
+        
         $this->rules = $ruleSetGenerator->getRulesFor($request, $ignorePlatformReqs);
         unset($ruleSetGenerator);
         $this->checkForRootRequireProblems($request, $ignorePlatformReqs);
@@ -205,8 +210,33 @@ class Solver
         $this->makeAssertionRuleDecisions();
 
         $this->io->writeError('Resolving dependencies through SAT', true, IOInterface::DEBUG);
+    
+        $useExternalSat = true;
         $before = microtime(true);
-        $this->runSat();
+
+        if ($useExternalSat) {
+            gc_enable();
+            gc_collect_cycles();
+        }
+
+        $beforeMemory = memory_get_usage(true);
+
+        if ($useExternalSat) {
+            $externalSolver = new ExternalSolverAdapter(new ExternalSolver(), $this->pool, $this->io);
+            $externalSolver->solve($this->rules, $this->decisions, $this->problems);
+        } else {
+            $this->runSat();
+        }
+
+        $afterMemory = memory_get_peak_usage(true);
+        
+        $this->io->write(sprintf('Dependency SAT resolution finished in <info>%.2f</info> seconds with <info>%.2f MB</info> (%.2f MB -> %.2f MB) memory usage.', 
+            microtime(true) - $before,
+            ($afterMemory - $beforeMemory) / 1E6,
+            $beforeMemory / 1E6,
+            $afterMemory / 1E6
+        ));
+
         $this->io->writeError('', true, IOInterface::DEBUG);
         $this->io->writeError(sprintf('Dependency resolution completed in %.3f seconds', microtime(true) - $before), true, IOInterface::VERBOSE);
 
